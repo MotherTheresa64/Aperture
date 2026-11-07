@@ -3,10 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Authentication primitives: scrypt password hashing, hashed session tokens, RFC 6238 TOTP, recovery codes and lockout.",
-  "engines": { "node": ">=24" },
-  "scripts": {
-    "test": "node --test"
+  "description": "Authentication primitives: scrypt hashing, hashed session tokens, TOTP and lockout, plus a browser demo.",
+  "engines": {
+    "node": ">=24"
   },
-  "license": "MIT"
+  "scripts": {
+    "test": "node --test",
+    "start": "node src/server.ts"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MotherTheresa64/aperture.git"
+  },
+  "homepage": "https://github.com/MotherTheresa64/aperture#readme",
+  "keywords": [
+    "nodejs",
+    "typescript",
+    "zero-dependencies"
+  ]
 }
