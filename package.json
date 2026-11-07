@@ -1,0 +1,12 @@
+{
+  "name": "@noah/aperture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Authentication primitives: scrypt password hashing, hashed session tokens, RFC 6238 TOTP, recovery codes and lockout.",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
