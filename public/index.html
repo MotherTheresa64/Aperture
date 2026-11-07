@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," />
+<title>Aperture — authentication</title>
+<style>
+  :root{--ink:#14181d;--muted:#5b6670;--line:#e2e6ea;--bg:#f6f7f9;--card:#fff;--accent:#2f5bea;--ok:#177245;--bad:#b3261e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:16px;letter-spacing:-.01em}
+  h1 span{display:block;font-size:12.5px;font-weight:400;color:var(--muted)}
+  main{max-width:900px;margin:0 auto;padding:18px 20px 40px;display:grid;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  label{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+  input{padding:9px 11px;font:14px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--line);border-radius:8px;background:#fff;color:inherit;width:100%}
+  button{font:inherit;font-weight:600;padding:8px 13px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;white-space:nowrap}
+  button.secondary{background:#fff;color:var(--ink);border-color:var(--line)}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .out{font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;margin:10px 0 0;background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:11px;min-height:40px}
+  .code{font:600 30px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;margin:8px 0 0}
+  .muted{color:var(--muted);font-size:12.5px}
+  .ok{color:var(--ok);font-weight:700}
+  .bad{color:var(--bad);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <h1>Aperture<span>scrypt passwords, hashed session tokens and TOTP</span></h1>
+</header>
+<main>
+  <section class="card">
+    <label for="password">Password</label>
+    <input id="password" type="text" value="correct horse battery staple" aria-label="password" />
+    <div class="row">
+      <button id="hash" type="button">Hash it</button>
+      <button id="verify" class="secondary" type="button">Verify this password</button>
+    </div>
+    <pre id="hashOut" class="out">Nothing hashed yet.</pre>
+  </section>
+  <section class="card">
+    <label for="secret">TOTP secret (base32)</label>
+    <input id="secret" type="text" value="JBSWY3DPEHPK3PXP" aria-label="totp secret" />
+    <div class="code" id="totpCode">------</div>
+    <div class="muted" id="totpMeta">refreshing…</div>
+    <label style="margin-top:12px" for="code">Verify a code</label>
+    <div class="row">
+      <input id="code" type="text" value="" aria-label="code to verify" style="max-width:180px" />
+      <button id="check" class="secondary" type="button">Verify</button>
+    </div>
+    <div id="totpResult" class="out" style="min-height:0;border:0;background:none;padding:0"></div>
+  </section>
+  <section class="card">
+    <label>Session</label>
+    <div class="row">
+      <button id="issue" type="button">Issue a session</button>
+      <button id="resolve" class="secondary" type="button">Resolve it</button>
+      <button id="revoke" class="secondary" type="button">Revoke it</button>
+    </div>
+    <pre id="sessionOut" class="out">No session yet.</pre>
+  </section>
+</main>
+<script>
+  const $ = (selector) => document.querySelector(selector);
+  let stored = null;
+  let token = null;
+
+  async function post(path, body) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
+    return res.json();
+  }
+
+  $("#hash").addEventListener("click", async () => {
+    const data = await post("/hash", { password: $("#password").value });
+    stored = data.stored;
+    $("#hashOut").textContent = stored + "\n\nfields: " + stored.split("$").length + ", parameters embedded in the string";
+  });
+
+  $("#verify").addEventListener("click", async () => {
+    if (!stored) { $("#hashOut").textContent = "Hash a password first."; return; }
+    const data = await post("/verify", { password: $("#password").value, stored });
+    $("#hashOut").textContent = "stored: " + stored + "\n\nverify -> " + (data.valid ? "valid" : "invalid");
+  });
+
+  async function refreshCode() {
+    const secret = $("#secret").value.trim();
+    if (!secret) return;
+    const res = await fetch("/totp?secret=" + encodeURIComponent(secret));
+    const data = await res.json();
+    if (!res.ok) { $("#totpCode").textContent = "error"; $("#totpMeta").textContent = data.message ?? ""; return; }
+    $("#totpCode").textContent = data.code;
+    $("#totpMeta").textContent = "valid for " + data.remaining + " more seconds";
+  }
+
+  $("#check").addEventListener("click", async () => {
+    const data = await post("/verify-totp", { secret: $("#secret").value.trim(), code: $("#code").value.trim() });
+    $("#totpResult").textContent = data.valid ? "accepted" : "rejected (" + (data.reason ?? "wrong code") + ")";
+    $("#totpResult").className = "out " + (data.valid ? "ok" : "bad");
+  });
+
+  $("#issue").addEventListener("click", async () => {
+    const data = await post("/session", { userId: "user-42" });
+    token = data.token;
+    $("#sessionOut").textContent = "issued for " + data.userId + "\ntoken: " + token;
+  });
+
+  $("#resolve").addEventListener("click", async () => {
+    if (!token) { $("#sessionOut").textContent = "Issue a session first."; return; }
+    const res = await fetch("/session?token=" + encodeURIComponent(token));
+    const data = await res.json();
+    $("#sessionOut").textContent = data.userId ? "resolved to " + data.userId : "no valid session";
+  });
+
+  $("#revoke").addEventListener("click", async () => {
+    if (!token) { $("#sessionOut").textContent = "Issue a session first."; return; }
+    await fetch("/session?token=" + encodeURIComponent(token), { method: "DELETE" });
+    $("#sessionOut").textContent = "revoked; resolving now returns nothing";
+    token = null;
+  });
+
+  $("#secret").addEventListener("change", refreshCode);
+  refreshCode();
+  setInterval(refreshCode, 1000);
+</script>
+</body>
+</html>
